@@ -91,27 +91,42 @@ struct NFLView: View {
                     .font(.subheadline)
 
                 HStack {
-                    ForEach(event.competitions.first?.competitors ?? [], id: \.team.displayName) { team in
-                        VStack {
-                            AsyncImage(url: URL(string: team.team.logo)) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(width: 50, height: 50)
-
-                            Text(team.team.displayName)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-
-                            Text("Score: \(team.score)")
-                                .font(.caption2)
-                                .fontWeight(.bold)  // Make score bold
-                                .frame(maxWidth: .infinity)  // Center the score
+                    // Left Team (Home)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+
+                    // Score in the center
+                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 48, weight: .bold))  // Big and bold score
+                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+
+                    // Right Team (Away)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
                 }
+                .padding(.vertical, 8)
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
@@ -152,27 +167,42 @@ struct NBAView: View {
                     .font(.subheadline)
 
                 HStack {
-                    ForEach(event.competitions.first?.competitors ?? [], id: \.team.displayName) { team in
-                        VStack {
-                            AsyncImage(url: URL(string: team.team.logo)) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(width: 50, height: 50)
-
-                            Text(team.team.displayName)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-
-                            Text("Score: \(team.score)")
-                                .font(.caption2)
-                                .fontWeight(.bold)  // Make score bold
-                                .frame(maxWidth: .infinity)  // Center the score
+                    // Left Team (Home)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+
+                    // Score in the center
+                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 48, weight: .bold))  // Big and bold score
+                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+
+                    // Right Team (Away)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
                 }
+                .padding(.vertical, 8)
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
@@ -188,12 +218,20 @@ struct NBAView: View {
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
+        
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            
+            // Set the desired time zone (e.g., U.S. Eastern Time)
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            
             return displayFormatter.string(from: date)
         }
+        
+        // If parsing fails, return the raw string
         return isoDate
     }
 }
@@ -213,27 +251,43 @@ struct MLBView: View {
                     .font(.subheadline)
 
                 HStack {
-                    ForEach(event.competitions.first?.competitors ?? [], id: \.team.displayName) { team in
-                        VStack {
-                            AsyncImage(url: URL(string: team.team.logo)) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(width: 50, height: 50)
-
-                            Text(team.team.displayName)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-
-                            Text("Score: \(team.score)")
-                                .font(.caption2)
-                                .fontWeight(.bold)  // Make score bold
-                                .frame(maxWidth: .infinity)  // Center the score
+                    // Left Team (Home)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+
+                    // Score in the center
+                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 48, weight: .bold))  // Big and bold score
+                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+
+                    // Right Team (Away)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
                 }
+                .padding(.vertical, 8)
+
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
@@ -249,12 +303,20 @@ struct MLBView: View {
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
+        
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            
+            // Set the desired time zone (e.g., U.S. Eastern Time)
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            
             return displayFormatter.string(from: date)
         }
+        
+        // If parsing fails, return the raw string
         return isoDate
     }
 }
@@ -274,27 +336,43 @@ struct WNBAView: View {
                     .font(.subheadline)
 
                 HStack {
-                    ForEach(event.competitions.first?.competitors ?? [], id: \.team.displayName) { team in
-                        VStack {
-                            AsyncImage(url: URL(string: team.team.logo)) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(width: 50, height: 50)
-
-                            Text(team.team.displayName)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-
-                            Text("Score: \(team.score)")
-                                .font(.caption2)
-                                .fontWeight(.bold)  // Make score bold
-                                .frame(maxWidth: .infinity)  // Center the score
+                    // Left Team (Home)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+
+                    // Score in the center
+                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 48, weight: .bold))  // Big and bold score
+                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+
+                    // Right Team (Away)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
                 }
+                .padding(.vertical, 8)
+
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
@@ -310,12 +388,20 @@ struct WNBAView: View {
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
+        
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            
+            // Set the desired time zone (e.g., U.S. Eastern Time)
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            
             return displayFormatter.string(from: date)
         }
+        
+        // If parsing fails, return the raw string
         return isoDate
     }
 }
@@ -335,25 +421,42 @@ struct NHLView: View {
                     .font(.subheadline)
 
                 HStack {
-                    ForEach(event.competitions.first?.competitors ?? [], id: \.team.displayName) { team in
-                        VStack {
-                            AsyncImage(url: URL(string: team.team.logo)) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
-                            }
-                            .frame(width: 50, height: 50)
-
-                            Text(team.team.displayName)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-
-                            Text("Score: \(team.score)")
-                                .font(.caption2)
+                    // Left Team (Home)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+
+                    // Score in the center
+                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 48, weight: .bold))  // Big and bold score
+                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+
+                    // Right Team (Away)
+                    VStack {
+                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
+                            image.resizable()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 50, height: 50)
+
+                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
                 }
+                .padding(.vertical, 8)
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
@@ -369,12 +472,20 @@ struct NHLView: View {
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
+        
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            
+            // Set the desired time zone (e.g., U.S. Eastern Time)
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            
             return displayFormatter.string(from: date)
         }
+        
+        // If parsing fails, return the raw string
         return isoDate
     }
 }
