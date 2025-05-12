@@ -16,6 +16,20 @@ struct GameEvent: Codable, Identifiable {
 struct Competition: Codable {
     let competitors: [Team]
     let status: GameStatus
+    let venue: Venue
+}
+
+struct Venue: Codable {
+    let id: String
+    let fullName: String
+    let address: VenueAddress
+    let indoor: Bool?
+}
+
+struct VenueAddress: Codable {
+    let city: String
+    let state: String
+    let country: String
 }
 
 struct Team: Codable {
@@ -26,7 +40,7 @@ struct Team: Codable {
 
 struct TeamInfo: Codable {
     let displayName: String
-    let logo: String
+    let logo: String?
 }
 
 struct GameStatus: Codable {
@@ -80,6 +94,8 @@ class DataFetcher: ObservableObject {
 
 struct NFLView: View {
     @StateObject private var fetcher = DataFetcher(sport: "nfl")
+    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
+    @State private var showDetails = false  // Track if the details sheet should be shown
 
     var body: some View {
         List(fetcher.games) { event in
@@ -104,12 +120,12 @@ struct NFLView: View {
                             .font(.caption)
                             .multilineTextAlignment(.center)
                     }
-                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
+                    .frame(maxWidth: .infinity)
 
                     // Score in the center
                     Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))  // Big and bold score
-                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
+                        .font(.system(size: 48, weight: .bold))
+                        .frame(maxWidth: .infinity)
 
                     // Right Team (Away)
                     VStack {
@@ -124,28 +140,109 @@ struct NFLView: View {
                             .font(.caption)
                             .multilineTextAlignment(.center)
                     }
-                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.vertical, 8)
 
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
+
+                // Details Button - Tapping this will show the sheet
+                Button("Details") {
+                    selectedGame = event
+                    showDetails.toggle()  // Toggle the sheet to show the details view
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 5)
             }
             .padding(.vertical, 8)
         }
-        .navigationTitle("NFL Games")
         .onAppear {
             fetcher.fetchGames()
+        }
+        .sheet(item: $selectedGame) { game in
+            GameDetailsView(gameEvent: game)
         }
     }
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [
+            .withInternetDateTime,
+            .withDashSeparatorInDate,
+            .withColonSeparatorInTime,
+            .withTimeZone
+        ]
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            return displayFormatter.string(from: date)
+        }
+        return isoDate
+    }
+}
+
+struct GameDetailsView: View {
+    let gameEvent: GameEvent
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 15) {
+                Text(gameEvent.name)
+                    .font(.largeTitle)
+                    .bold()
+
+                Text("Date: \(formattedDate(gameEvent.date))")
+                    .font(.subheadline)
+
+                ForEach(gameEvent.competitions.first?.competitors ?? [], id: \.team.displayName) { competitor in
+                    HStack {
+                        if let logo = competitor.team.logo, let url = URL(string: logo) {
+                            AsyncImage(url: url) { image in
+                                image.resizable()
+                            } placeholder: {
+                                ProgressView()
+                            }
+                            .frame(width: 50, height: 50)
+                        }
+                        Text(competitor.team.displayName)
+                            .font(.headline)
+
+                        Spacer()
+
+                        Text(competitor.score)
+                            .font(.headline)
+                    }
+                }
+
+                Text("Status: \(gameEvent.competitions.first?.status.type.description ?? "Unknown")")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                
+            }
+            .padding()
+        }
+        .navigationTitle("Game Details")
+    }
+
+    func formattedDate(_ isoDate: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [
+            .withInternetDateTime,
+            .withDashSeparatorInDate,
+            .withColonSeparatorInTime,
+            .withTimeZone
+        ]
+        if let date = formatter.date(from: isoDate) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.locale = Locale(identifier: "en_US")
+            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
+            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            
             return displayFormatter.string(from: date)
         }
         return isoDate
@@ -156,6 +253,9 @@ struct NFLView: View {
 
 struct NBAView: View {
     @StateObject private var fetcher = DataFetcher(sport: "nba")
+    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
+    @State private var showDetails = false  // Track if the details sheet should be shown
+
 
     var body: some View {
         List(fetcher.games) { event in
@@ -207,12 +307,24 @@ struct NBAView: View {
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
+                
+                // Details Button - Tapping this will show the sheet
+                Button("Details") {
+                    selectedGame = event
+                    showDetails.toggle()  // Toggle the sheet to show the details view
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 5)
             }
             .padding(.vertical, 8)
         }
         .navigationTitle("NBA Games")
         .onAppear {
             fetcher.fetchGames()
+        }
+        .sheet(item: $selectedGame) { game in
+            GameDetailsView(gameEvent: game)
         }
     }
 
@@ -240,6 +352,9 @@ struct NBAView: View {
 
 struct MLBView: View {
     @StateObject private var fetcher = DataFetcher(sport: "mlb")
+    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
+    @State private var showDetails = false  // Track if the details sheet should be shown
+
 
     var body: some View {
         List(fetcher.games) { event in
@@ -292,12 +407,24 @@ struct MLBView: View {
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
+                
+                // Details Button - Tapping this will show the sheet
+                Button("Details") {
+                    selectedGame = event
+                    showDetails.toggle()  // Toggle the sheet to show the details view
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 5)
             }
             .padding(.vertical, 8)
         }
         .navigationTitle("MLB Games")
         .onAppear {
             fetcher.fetchGames()
+        }
+        .sheet(item: $selectedGame) { game in
+            GameDetailsView(gameEvent: game)
         }
     }
 
@@ -325,6 +452,9 @@ struct MLBView: View {
 
 struct WNBAView: View {
     @StateObject private var fetcher = DataFetcher(sport: "wnba")
+    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
+    @State private var showDetails = false  // Track if the details sheet should be shown
+
 
     var body: some View {
         List(fetcher.games) { event in
@@ -377,12 +507,24 @@ struct WNBAView: View {
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
+                
+                // Details Button - Tapping this will show the sheet
+                Button("Details") {
+                    selectedGame = event
+                    showDetails.toggle()  // Toggle the sheet to show the details view
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 5)
             }
             .padding(.vertical, 8)
         }
         .navigationTitle("WNBA Games")
         .onAppear {
             fetcher.fetchGames()
+        }
+        .sheet(item: $selectedGame) { game in
+            GameDetailsView(gameEvent: game)
         }
     }
 
@@ -410,6 +552,8 @@ struct WNBAView: View {
 
 struct NHLView: View {
     @StateObject private var fetcher = DataFetcher(sport: "nhl")
+    @State private var selectedGame: GameEvent?
+    @State private var showDetails = false
 
     var body: some View {
         List(fetcher.games) { event in
@@ -461,12 +605,25 @@ struct NHLView: View {
                 Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
+                
+                // Details Button - Tapping this will show the sheet
+                Button("Details") {
+                    selectedGame = event
+                    showDetails.toggle()  // Toggle the sheet to show the details view
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 5)
             }
             .padding(.vertical, 8)
         }
         .navigationTitle("NHL Games")
         .onAppear {
             fetcher.fetchGames()
+            
+        }
+        .sheet(item: $selectedGame) { game in
+            GameDetailsView(gameEvent: game)
         }
     }
 
@@ -497,7 +654,7 @@ struct ContentView: View {
         TabView {
             NFLView()
                 .tabItem {
-                    Label("NFL", systemImage: "sportscourt.fill")
+                    Label("NFL", systemImage: "american.football.fill")
                 }
             
             NBAView()
