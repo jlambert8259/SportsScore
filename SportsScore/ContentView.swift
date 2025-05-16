@@ -1,689 +1,323 @@
 import SwiftUI
 
-// MARK: - Models
+// MARK: - Data Models
 
-struct Scoreboard: Codable {
-    let events: [GameEvent]
-}
-
-struct GameEvent: Codable, Identifiable {
+struct Game: Identifiable, Codable {
     let id: String
     let name: String
     let date: String
     let competitions: [Competition]
+    let tickets: [Ticket]?
 }
 
 struct Competition: Codable {
-    let competitors: [Team]
-    let status: GameStatus
-    let venue: Venue
+    let competitors: [Competitor]
+    let status: Status
+    let venue: Venue?
+    let attendance: Int?
+    let broadcasts: [Broadcast]?
 }
 
-struct Venue: Codable {
-    let id: String
-    let fullName: String
-    let address: VenueAddress
-    let indoor: Bool?
-}
-
-struct VenueAddress: Codable {
-    let city: String
-    let state: String
-    let country: String
+struct Competitor: Codable {
+    let team: Team
+    let score: String?
+    let records: [Record]?
 }
 
 struct Team: Codable {
-    let team: TeamInfo
-    let score: String
-    let homeAway: String
-}
-
-struct TeamInfo: Codable {
     let displayName: String
-    let logo: String?
+    let logo: String
+    let abbreviation: String
+    let location: String
 }
 
-struct GameStatus: Codable {
+struct Record: Codable {
+    let type: String
+    let summary: String
+}
+
+struct Status: Codable {
     let type: StatusType
+    let clock: Double?
+    let period: Int?
 }
 
 struct StatusType: Codable {
     let description: String
 }
 
+struct Venue: Codable {
+    let fullName: String
+}
+
+struct Broadcast: Codable {
+    let names: [String]
+}
+
+struct Ticket: Codable, Identifiable {
+    var id: String { href }
+    let summary: String
+    let href: String
+}
+
+struct ScoreboardResponse: Codable {
+    let events: [Game]
+}
+
 // MARK: - Data Fetcher
 
 class DataFetcher: ObservableObject {
-    @Published var games: [GameEvent] = []
-    private var url: URL?
+    @Published var games: [Game] = []
+    private var sportPath: String
+    private var timer: Timer?
 
-    init(sport: String) {
-        // Set the correct URL for sport
-        if sport == "nba" {
-            self.url = URL(string: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")
-        } else if sport == "nfl" {
-            self.url = URL(string: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard")
-        } else if sport == "mlb" {
-            self.url = URL(string: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard")
-        } else if sport == "wnba" {
-            self.url = URL(string: "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard")
-        } else if sport == "nhl" {
-            self.url = URL(string: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard")
-        }
+    init(sportPath: String) {
+        self.sportPath = sportPath
+        startAutoRefresh()
     }
 
     func fetchGames() {
-        guard let url = url else { return }
+        let urlString = "https://site.api.espn.com/apis/site/v2/sports/\(sportPath)/scoreboard"
+        guard let url = URL(string: urlString) else {
+            print("Invalid URL: \(urlString)")
+            return
+        }
 
-        URLSession.shared.dataTask(with: url) { data, response, error in
+        URLSession.shared.dataTask(with: url) { data, _, error in
             if let data = data {
                 do {
-                    let decoded = try JSONDecoder().decode(Scoreboard.self, from: data)
+                    let decodedResponse = try JSONDecoder().decode(ScoreboardResponse.self, from: data)
                     DispatchQueue.main.async {
-                        self.games = decoded.events
+                        self.games = decodedResponse.events
                     }
                 } catch {
-                    print("Decoding error:", error)
+                    print("Decoding failed: \(error)")
                 }
+            } else if let error = error {
+                print("Network error: \(error)")
             }
         }.resume()
     }
+
+    private func startAutoRefresh() {
+        timer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
+            self.fetchGames()
+        }
+    }
+
+    deinit {
+        timer?.invalidate()
+    }
 }
 
-// MARK: - NFL View
+// MARK: - Team View
 
-struct NFLView: View {
-    @StateObject private var fetcher = DataFetcher(sport: "nfl")
-    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
-    @State private var showDetails = false  // Track if the details sheet should be shown
+struct TeamView: View {
+    let competitor: Competitor?
 
     var body: some View {
-        List(fetcher.games) { event in
-            VStack(alignment: .leading, spacing: 10) {
-                Text(event.name)
-                    .font(.headline)
-
-                Text("Date: \(formattedDate(event.date))")
-                    .font(.subheadline)
-
-                HStack {
-                    // Left Team (Home)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    // Score in the center
-                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))
-                        .frame(maxWidth: .infinity)
-
-                    // Right Team (Away)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
+        VStack {
+            if let logoURL = competitor?.team.logo, let url = URL(string: logoURL) {
+                AsyncImage(url: url) { image in
+                    image.resizable()
+                } placeholder: {
+                    ProgressView()
                 }
-                .padding(.vertical, 8)
-
-                Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-
-                // Details Button - Tapping this will show the sheet
-                Button("Details") {
-                    selectedGame = event
-                    showDetails.toggle()  // Toggle the sheet to show the details view
-                }
-                .font(.footnote)
-                .foregroundColor(.blue)
-                .padding(.top, 5)
+                .frame(width: 50, height: 50)
             }
-            .padding(.vertical, 8)
-        }
-        .onAppear {
-            fetcher.fetchGames()
-        }
-        .sheet(item: $selectedGame) { game in
-            GameDetailsView(gameEvent: game)
-        }
-    }
 
-    func formattedDate(_ isoDate: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [
-            .withInternetDateTime,
-            .withDashSeparatorInDate,
-            .withColonSeparatorInTime,
-            .withTimeZone
-        ]
-        if let date = formatter.date(from: isoDate) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.locale = Locale(identifier: "en_US")
-            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
-            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            return displayFormatter.string(from: date)
+            Text(competitor?.team.displayName ?? "")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+
+            if let record = competitor?.records?.first {
+                Text("Record: \(record.summary)")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
         }
-        return isoDate
+        .frame(maxWidth: .infinity)
     }
 }
 
-struct GameDetailsView: View {
-    let gameEvent: GameEvent
+// MARK: - Game Detail View
+
+struct GameDetailView: View {
+    let gameID: String
+    @ObservedObject var fetcher: DataFetcher
+
+    var currentGame: Game? {
+        fetcher.games.first { $0.id == gameID }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 15) {
-                Text(gameEvent.name)
-                    .font(.largeTitle)
-                    .bold()
+            if let game = currentGame {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(game.name)
+                        .font(.title2)
+                        .padding(.bottom, 5)
 
-                Text("Date: \(formattedDate(gameEvent.date))")
-                    .font(.subheadline)
+                    Text("Date: \(formattedDate(game.date))")
+                        .font(.subheadline)
 
-                ForEach(gameEvent.competitions.first?.competitors ?? [], id: \.team.displayName) { competitor in
-                    HStack {
-                        if let logo = competitor.team.logo, let url = URL(string: logo) {
-                            AsyncImage(url: url) { image in
-                                image.resizable()
-                            } placeholder: {
-                                ProgressView()
+                    if let competition = game.competitions.first {
+                        if let venue = competition.venue {
+                            Text("Venue: \(venue.fullName)")
+                        }
+
+                        if let attendance = competition.attendance {
+                            Text("Attendance: \(attendance)")
+                        }
+
+                        if let broadcast = competition.broadcasts?.first {
+                            Text("Watch on: \(broadcast.names.joined(separator: ", "))")
+                        }
+
+                        Text("Status: \(competition.status.type.description)")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+
+                        HStack {
+                            TeamView(competitor: competition.competitors.first)
+                            Text("\(competition.competitors.first?.score ?? "0") - \(competition.competitors.last?.score ?? "0")")
+                                .font(.system(size: 28, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                            TeamView(competitor: competition.competitors.last)
+                        }
+                        .padding(.vertical, 8)
+                    }
+
+                    if let tickets = game.tickets, !tickets.isEmpty {
+                        Divider()
+                        Text("🎟️ Tickets")
+                            .font(.headline)
+                        ForEach(tickets) { ticket in
+                            Link(destination: URL(string: ticket.href)!) {
+                                Text(ticket.summary)
+                                    .foregroundColor(.blue)
+                                    .underline()
                             }
-                            .frame(width: 50, height: 50)
                         }
-                        Text(competitor.team.displayName)
-                            .font(.headline)
-
-                        Spacer()
-
-                        Text(competitor.score)
-                            .font(.headline)
                     }
                 }
-
-                Text("Status: \(gameEvent.competitions.first?.status.type.description ?? "Unknown")")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                
+                .padding()
+            } else {
+                ProgressView("Loading game details...")
+                    .padding()
             }
-            .padding()
         }
-        .navigationTitle("Game Details")
     }
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [
-            .withInternetDateTime,
-            .withDashSeparatorInDate,
-            .withColonSeparatorInTime,
-            .withTimeZone
-        ]
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
             displayFormatter.locale = Locale(identifier: "en_US")
             displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
             displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            
             return displayFormatter.string(from: date)
         }
         return isoDate
     }
 }
 
-// MARK: - NBA View
+// MARK: - Sport View
 
-struct NBAView: View {
-    @StateObject private var fetcher = DataFetcher(sport: "nba")
-    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
-    @State private var showDetails = false  // Track if the details sheet should be shown
+struct SportView: View {
+    @StateObject private var fetcher: DataFetcher
+    @State private var selectedGame: Game?
 
+    init(sportPath: String) {
+        _fetcher = StateObject(wrappedValue: DataFetcher(sportPath: sportPath))
+    }
 
     var body: some View {
-        List(fetcher.games) { event in
+        List(fetcher.games) { game in
             VStack(alignment: .leading, spacing: 10) {
-                Text(event.name)
+                Text(game.name)
                     .font(.headline)
 
-                Text("Date: \(formattedDate(event.date))")
+                Text("Date: \(formattedDate(game.date))")
                     .font(.subheadline)
 
                 HStack {
-                    // Left Team (Home)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
-
-                    // Score in the center
-                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))  // Big and bold score
-                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
-
-                    // Right Team (Away)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
+                    TeamView(competitor: game.competitions.first?.competitors.first)
+                    Text("\(game.competitions.first?.competitors.first?.score ?? "0") - \(game.competitions.first?.competitors.last?.score ?? "0")")
+                        .font(.system(size: 28, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                    TeamView(competitor: game.competitions.first?.competitors.last)
                 }
-                .padding(.vertical, 8)
 
-                Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
+                Text("Status: \(game.competitions.first?.status.type.description ?? "Unknown")")
                     .font(.footnote)
                     .foregroundColor(.gray)
-                
-                // Details Button - Tapping this will show the sheet
+
                 Button("Details") {
-                    selectedGame = event
-                    showDetails.toggle()  // Toggle the sheet to show the details view
+                    selectedGame = game
                 }
-                .font(.footnote)
-                .foregroundColor(.blue)
-                .padding(.top, 5)
+                .buttonStyle(.borderedProminent)
             }
             .padding(.vertical, 8)
         }
-        .navigationTitle("NBA Games")
+        .sheet(item: $selectedGame) { game in
+            GameDetailView(gameID: game.id, fetcher: fetcher)
+        }
         .onAppear {
             fetcher.fetchGames()
-        }
-        .sheet(item: $selectedGame) { game in
-            GameDetailsView(gameEvent: game)
         }
     }
 
     func formattedDate(_ isoDate: String) -> String {
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        
         if let date = formatter.date(from: isoDate) {
             let displayFormatter = DateFormatter()
             displayFormatter.locale = Locale(identifier: "en_US")
             displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
-            
-            // Set the desired time zone (e.g., U.S. Eastern Time)
             displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            
             return displayFormatter.string(from: date)
         }
-        
-        // If parsing fails, return the raw string
         return isoDate
     }
 }
 
-// MARK: - MLB View
-
-struct MLBView: View {
-    @StateObject private var fetcher = DataFetcher(sport: "mlb")
-    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
-    @State private var showDetails = false  // Track if the details sheet should be shown
-
-
-    var body: some View {
-        List(fetcher.games) { event in
-            VStack(alignment: .leading, spacing: 10) {
-                Text(event.name)
-                    .font(.headline)
-
-                Text("Date: \(formattedDate(event.date))")
-                    .font(.subheadline)
-
-                HStack {
-                    // Left Team (Home)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
-
-                    // Score in the center
-                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))  // Big and bold score
-                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
-
-                    // Right Team (Away)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
-                }
-                .padding(.vertical, 8)
-
-
-                Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                
-                // Details Button - Tapping this will show the sheet
-                Button("Details") {
-                    selectedGame = event
-                    showDetails.toggle()  // Toggle the sheet to show the details view
-                }
-                .font(.footnote)
-                .foregroundColor(.blue)
-                .padding(.top, 5)
-            }
-            .padding(.vertical, 8)
-        }
-        .navigationTitle("MLB Games")
-        .onAppear {
-            fetcher.fetchGames()
-        }
-        .sheet(item: $selectedGame) { game in
-            GameDetailsView(gameEvent: game)
-        }
-    }
-
-    func formattedDate(_ isoDate: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        
-        if let date = formatter.date(from: isoDate) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.locale = Locale(identifier: "en_US")
-            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
-            
-            // Set the desired time zone (e.g., U.S. Eastern Time)
-            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            
-            return displayFormatter.string(from: date)
-        }
-        
-        // If parsing fails, return the raw string
-        return isoDate
-    }
-}
-
-// MARK: - WNBA View
-
-struct WNBAView: View {
-    @StateObject private var fetcher = DataFetcher(sport: "wnba")
-    @State private var selectedGame: GameEvent?  // Track the selected game to pass to the details view
-    @State private var showDetails = false  // Track if the details sheet should be shown
-
-
-    var body: some View {
-        List(fetcher.games) { event in
-            VStack(alignment: .leading, spacing: 10) {
-                Text(event.name)
-                    .font(.headline)
-
-                Text("Date: \(formattedDate(event.date))")
-                    .font(.subheadline)
-
-                HStack {
-                    // Left Team (Home)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
-
-                    // Score in the center
-                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))  // Big and bold score
-                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
-
-                    // Right Team (Away)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
-                }
-                .padding(.vertical, 8)
-
-
-                Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                
-                // Details Button - Tapping this will show the sheet
-                Button("Details") {
-                    selectedGame = event
-                    showDetails.toggle()  // Toggle the sheet to show the details view
-                }
-                .font(.footnote)
-                .foregroundColor(.blue)
-                .padding(.top, 5)
-            }
-            .padding(.vertical, 8)
-        }
-        .navigationTitle("WNBA Games")
-        .onAppear {
-            fetcher.fetchGames()
-        }
-        .sheet(item: $selectedGame) { game in
-            GameDetailsView(gameEvent: game)
-        }
-    }
-
-    func formattedDate(_ isoDate: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        
-        if let date = formatter.date(from: isoDate) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.locale = Locale(identifier: "en_US")
-            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
-            
-            // Set the desired time zone (e.g., U.S. Eastern Time)
-            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            
-            return displayFormatter.string(from: date)
-        }
-        
-        // If parsing fails, return the raw string
-        return isoDate
-    }
-}
-
-// MARK: - NHL View
-
-struct NHLView: View {
-    @StateObject private var fetcher = DataFetcher(sport: "nhl")
-    @State private var selectedGame: GameEvent?
-    @State private var showDetails = false
-
-    var body: some View {
-        List(fetcher.games) { event in
-            VStack(alignment: .leading, spacing: 10) {
-                Text(event.name)
-                    .font(.headline)
-
-                Text("Date: \(formattedDate(event.date))")
-                    .font(.subheadline)
-
-                HStack {
-                    // Left Team (Home)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.first?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.first?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the left team to take as much space as needed
-
-                    // Score in the center
-                    Text("\(event.competitions.first?.competitors.first?.score ?? "0") - \(event.competitions.first?.competitors.last?.score ?? "0")")
-                        .font(.system(size: 48, weight: .bold))  // Big and bold score
-                        .frame(maxWidth: .infinity)  // Ensure the score is centered between the two logos
-
-                    // Right Team (Away)
-                    VStack {
-                        AsyncImage(url: URL(string: event.competitions.first?.competitors.last?.team.logo ?? "")) { image in
-                            image.resizable()
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 50, height: 50)
-
-                        Text(event.competitions.first?.competitors.last?.team.displayName ?? "")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)  // Forces the right team to take as much space as needed
-                }
-                .padding(.vertical, 8)
-
-                Text("Status: \(event.competitions.first?.status.type.description ?? "Unknown")")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                
-                // Details Button - Tapping this will show the sheet
-                Button("Details") {
-                    selectedGame = event
-                    showDetails.toggle()  // Toggle the sheet to show the details view
-                }
-                .font(.footnote)
-                .foregroundColor(.blue)
-                .padding(.top, 5)
-            }
-            .padding(.vertical, 8)
-        }
-        .navigationTitle("NHL Games")
-        .onAppear {
-            fetcher.fetchGames()
-            
-        }
-        .sheet(item: $selectedGame) { game in
-            GameDetailsView(gameEvent: game)
-        }
-    }
-
-    func formattedDate(_ isoDate: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        
-        if let date = formatter.date(from: isoDate) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.locale = Locale(identifier: "en_US")
-            displayFormatter.dateFormat = "MM/dd/yyyy, hh:mm a"
-            
-            // Set the desired time zone (e.g., U.S. Eastern Time)
-            displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-            
-            return displayFormatter.string(from: date)
-        }
-        
-        // If parsing fails, return the raw string
-        return isoDate
-    }
-}
-
-// MARK: - Main Tab View
+// MARK: - Main App View
 
 struct ContentView: View {
     var body: some View {
         TabView {
-            NFLView()
+            SportView(sportPath: "basketball/nba")
                 .tabItem {
-                    Label("NFL", systemImage: "american.football.fill")
-                }
-            
-            NBAView()
-                .tabItem {
-                    Label("NBA", systemImage: "basketball.fill")
-                }
-            
-            MLBView()
-                .tabItem {
-                    Label("MLB", systemImage: "baseball.fill")
+                    Label("NBA", systemImage: "sportscourt")
                 }
 
-            WNBAView()
+            SportView(sportPath: "basketball/wnba")
                 .tabItem {
-                    Label("WNBA", systemImage: "basketball.fill")
+                    Label("WNBA", systemImage: "sportscourt")
                 }
 
-            NHLView()
+            SportView(sportPath: "baseball/mlb")
                 .tabItem {
-                    Label("NHL", systemImage: "hockey.puck.fill")
+                    Label("MLB", systemImage: "baseball")
+                }
+
+            SportView(sportPath: "hockey/nhl")
+                .tabItem {
+                    Label("NHL", systemImage: "hockey.puck")
+                }
+
+            SportView(sportPath: "football/nfl")
+                .tabItem {
+                    Label("NFL", systemImage: "football")
                 }
         }
     }
 }
 
-// MARK: - App Entry Point
+// MARK: - App Entry
 
 @main
-struct SportsScoreboardApp: App {
+struct SportsScoreApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
